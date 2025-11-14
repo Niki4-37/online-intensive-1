@@ -1,7 +1,11 @@
 package hashmap;
+
+import java.util.Objects;
+
 public class SimpleHashMap<K,V> {
 
-    static final int DEFAULT_CAPACITY = 16;
+    static final int DEFAULT_CAPACITY = 1 << 4;
+    static final int MAX_CAPACITY = 1 << 30;
     
     int capacity;
     int size;
@@ -21,97 +25,103 @@ public class SimpleHashMap<K,V> {
     }
 
     public void put(K key, V value) {
-        putToBucket(hash(key), key, value);
+        if (key == null) return;
+        
+        int hash = hash(key);
+        int bucketIndex = (buckets.length - 1) & hash;
+
+        for (
+            MapPair<K,V> bucketPair = buckets[bucketIndex]; 
+            bucketPair != null; 
+            bucketPair = bucketPair.nextPair
+            ) {
+            if (
+                bucketPair.hash == hash
+                && Objects.equals(key, bucketPair.key)
+                ) {
+                bucketPair.value = value;
+                return;
+            }
+            if (
+                bucketPair.nextPair == null
+                ) {
+                bucketPair.nextPair = new MapPair<K,V>(hash, key, value, null);
+                ++size;
+                return;
+            }
+                    
+        }
+
+        buckets[bucketIndex] = new MapPair<K,V>(hash, key, value, null);
+        ++size;
+        if (size >= capacity*loadFactor) {
+            resize();
+        }
     }
 
     public int size() { return size; }
 
-    void putToBucket(int hash, K key, V value) {
-        int bucketIndex, bucketCapacity;
-        MapPair<K,V> bucketPair;
-        bucketCapacity = buckets.length;
-        bucketIndex = (bucketCapacity - 1) & hash;
-
-        if ((bucketPair = buckets[bucketIndex]) == null) {
-            buckets[bucketIndex] = new MapPair<>(hash, key, value, null);
-        } else {
-            MapPair<K,V> tempPair;
-            K bucketPairKey;
-            if (bucketPair.hash == hash 
-                && ((bucketPairKey = bucketPair.key) == key || (key != null && key.equals(bucketPairKey)))) {
-                tempPair = bucketPair;
-            } else {
-                while (true) {
-                    tempPair = bucketPair.nextPair;
-                    if (tempPair == null) {
-                        bucketPair.nextPair = new MapPair<>(hash, key, value, null);
-                        break;
-                    }
-                    if (tempPair.hash == hash 
-                        && ((bucketPairKey = tempPair.key) == key || (key != null && key.equals(bucketPairKey)))) {
-                            break;
-                        }
-                    bucketPair = tempPair;
-                }
-            }
-            if (tempPair != null) {
-                tempPair.value = value;
-                return;
-            }
-        }
-        ++size;
-    }
-
     public V get(Object key) {
         if (key == null) return null;
-        MapPair<K,V> bucketPair;
+        
         int hash = hash(key);
-        for (int i = 0; i < buckets.length; ++i) {
-            if ((bucketPair = buckets[i]) == null) continue; 
-            if (hash == bucketPair.hash
-                && bucketPair.key == key || key.equals(bucketPair.key)) return bucketPair.value;
-            
-            MapPair<K,V> nextPair = bucketPair.nextPair;
-            K bucketPairKey;
-            while (nextPair != null) {
-                if (hash == nextPair.hash
-                    && ((bucketPairKey = nextPair.key) == key || key.equals(bucketPairKey))) {
-                    return nextPair.value;
-                }
-                nextPair = nextPair.nextPair; 
-            }
+        int bucketIndex = (buckets.length - 1) & hash;
+        
+        for (
+            MapPair<K,V> bucketPair = buckets[bucketIndex]; 
+            bucketPair != null; 
+            bucketPair = bucketPair.nextPair
+            ) {
+                if (bucketPair.hash == hash
+                    && Objects.equals(key, bucketPair.key))
+                    return bucketPair.value;
         }
         return null;
     }
 
     public V remove(Object key) {
         if (key == null) return null;
-        MapPair<K,V> bucketPair;
+        
         int hash = hash(key);
-        for (int i = 0; i < buckets.length; ++i) {
-            if ((bucketPair = buckets[i]) == null) continue; 
-            if (hash == bucketPair.hash
-                && bucketPair.key == key || key.equals(bucketPair.key)) {
-                    if (bucketPair.nextPair != null) buckets[i] = bucketPair.nextPair;
-                    --size;
-                    return bucketPair.value;
+        int bucketIndex = (buckets.length - 1) & hash;
+        
+        MapPair<K,V> prevPair = null, currentPair = buckets[bucketIndex];
+        while (currentPair != null) {
+            if (
+                hash == currentPair.hash
+                && Objects.equals(key, currentPair.key)
+                ) {
+                if (
+                    prevPair == null
+                ) { 
+                    buckets[bucketIndex] = currentPair.nextPair;
+                } else {
+                    prevPair.nextPair = currentPair.nextPair;
                 }
-            
-            MapPair<K,V> nextPair = bucketPair.nextPair;
-            MapPair<K,V> currenyPair = bucketPair; 
-            K bucketPairKey;
-            while (nextPair != null) {
-                if (hash == nextPair.hash
-                    && ((bucketPairKey = nextPair.key) == key || key.equals(bucketPairKey))) {
-                        currenyPair.nextPair = nextPair.nextPair;
-                        --size;
-                        return nextPair.value;
-                }
-                currenyPair = nextPair;
-                nextPair = nextPair.nextPair; 
+                --size;
+                return currentPair.value;
             }
+            prevPair = currentPair;
+            currentPair = currentPair.nextPair;
         }
         return null;
+    }
+
+    void resize() {
+        System.out.println("Resize called");
+        int oldCap = capacity;
+        if (oldCap >= MAX_CAPACITY) return;
+        capacity = oldCap << 1;
+        MapPair<K,V>[] oldBuckets = buckets;
+        buckets = (MapPair<K,V>[]) new MapPair[capacity];
+        size = 0;
+        for (var oldBucket : oldBuckets) {
+            MapPair<K,V> pairInChain = oldBucket;
+            while (pairInChain != null) {
+                put(pairInChain.key, pairInChain.value);
+                pairInChain = pairInChain.nextPair;
+            }
+        }
     }
 
     static class MapPair<K,V> {
@@ -139,19 +149,13 @@ public class SimpleHashMap<K,V> {
     public String toString() {
         if (size <= 0) return "Empty map";
         StringBuilder stringVault = new StringBuilder();
+        stringVault.append("Map size: " + size + '\n');
         MapPair<K,V> bucketPair;
-        MapPair<K,V> nextPair;
         for (int i = 0; i < buckets.length; ++i) {
-            if ((bucketPair = buckets[i]) == null) {
-                continue;
-            }
-            if (bucketPair != null) {
+            bucketPair = buckets[i];
+            while (bucketPair != null) {
                 stringVault.append(bucketPair);
-            }
-            nextPair = bucketPair.nextPair;
-            while (nextPair != null) {
-                stringVault.append(nextPair);
-                nextPair = nextPair.nextPair;
+                bucketPair = bucketPair.nextPair;
             }
         }
         return stringVault.toString();
