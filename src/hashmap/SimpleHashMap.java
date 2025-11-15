@@ -24,11 +24,15 @@ public class SimpleHashMap<K,V> {
         return o == null ? 0 : (h = o.hashCode()) ^ (h >>> 16); 
     }
 
+    int indexByHash(int hash) {
+        return (capacity - 1) & hash;
+    }
+
     public void put(K key, V value) {
         if (key == null) return;
         
         int hash = hash(key);
-        int bucketIndex = (buckets.length - 1) & hash;
+        int bucketIndex = indexByHash(hash);
 
         for (
             MapPair<K,V> bucketPair = buckets[bucketIndex]; 
@@ -65,7 +69,7 @@ public class SimpleHashMap<K,V> {
         if (key == null) return null;
         
         int hash = hash(key);
-        int bucketIndex = (buckets.length - 1) & hash;
+        int bucketIndex = indexByHash(hash);
         
         for (
             MapPair<K,V> bucketPair = buckets[bucketIndex]; 
@@ -83,7 +87,7 @@ public class SimpleHashMap<K,V> {
         if (key == null) return null;
         
         int hash = hash(key);
-        int bucketIndex = (buckets.length - 1) & hash;
+        int bucketIndex = indexByHash(hash);
         
         MapPair<K,V> prevPair = null, currentPair = buckets[bucketIndex];
         while (currentPair != null) {
@@ -108,7 +112,6 @@ public class SimpleHashMap<K,V> {
     }
 
     void resize() {
-        System.out.println("Resize called");
         int oldCap = capacity;
         if (oldCap >= MAX_CAPACITY) return;
         capacity = oldCap << 1;
@@ -116,10 +119,10 @@ public class SimpleHashMap<K,V> {
         buckets = (MapPair<K,V>[]) new MapPair[capacity];
         size = 0;
         for (var oldBucket : oldBuckets) {
-            MapPair<K,V> pairInChain = oldBucket;
-            while (pairInChain != null) {
-                put(pairInChain.key, pairInChain.value);
-                pairInChain = pairInChain.nextPair;
+            MapPair<K,V> linkedPair = oldBucket;
+            while (linkedPair != null) {
+                put(linkedPair.key, linkedPair.value);
+                linkedPair = linkedPair.nextPair;
             }
         }
     }
